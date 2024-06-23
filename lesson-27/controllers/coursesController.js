@@ -15,22 +15,84 @@ module.exports = {
    * Listing 27.2 (p. 393)
    * @TODO: coursesController.js에서 강좌를 위한 JSON 응답 추가
    */
-  respondJSON: () => {},
+  respondJSON: (req, res) => {
+    res.json({
+      status: httpStatus.OK,
+      data: res.locals,
+    }); // 로컬 데이터를 JSON 포맷으로 응답
+  },
 
   // JSON 포맷으로 500 상태 코드와 에러 메시지 응답
-  errorJSON: () => {},
+  errorJSON: (error, req, res, next) => {
+    let errorObject;
+
+    if (error) {
+      errorObject = {
+        status: httpStatus.INTERNAL_SERVER_ERROR,
+        message: error.message,
+      };
+    } else {
+      errorObject = {
+        status: httpStatus.INTERNAL_SERVER_ERROR,
+        message: "Unknown Error.",
+      };
+    }
+
+    res.json(errorObject);
+  },
 
   /**
    * Listing 27.6 (p. 399-400)
    * @TODO: courseController.js에서 강좌 참여 액션의 생성
    */
-  join: () => {},
+  join: (req, res, next) => {
+    let courseId = req.params.id, // 요청으로부터 강좌 ID 수집
+      currentUser = req.user; // 요청으로부터 현재 사용자 수집
+
+    if (currentUser) {
+      // 사용자가 로그인 중인지 확인
+      User.findByIdAndUpdate(currentUser, {
+        $addToSet: {
+          courses: courseId, // 사용자의 강좌 배열에 강좌 ID 추가
+        },
+      }) // 사용자의 강좌 배열에 강좌 ID 추가
+        .then(() => {
+          res.locals.success = true;
+          next();
+        })
+        .catch((error) => {
+          next(error);
+        });
+    } else {
+      next(new Error("User must log in."));
+    }
+  },
 
   /**
    * Listing 27.7 (p. 401)
    * @TODO: courseController.js에서 강좌 필터에 액션 추가
    */
-  filterUserCourses: () => {},
+  filterUserCourses: (req, res, next) => {
+    let currentUser = req.user; // 요청으로부터 현재 사용자 수집
+
+    if (currentUser) {
+      // 사용자가 로그인 중인지 확인
+      let mappedCourses = res.locals.courses.map((course) => {
+        // 강좌 배열을 푸프로 돌며
+        let userJoined = currentUser.courses.some((userCourse) => {
+          return userCourse.equals(course._id); // 사용자가 강좌에 참여했는지 확인
+        });
+
+        return Object.assign(course.toObject(), { joined: userJoined });
+      });
+
+      res.locals.courses = mappedCourses;
+      next();
+    } else {
+      console.log("Filter Courses: User must login!");
+      next();
+    }
+  },
 
   index: (req, res, next) => {
     Course.find() // index 액션에서만 퀴리 실행
